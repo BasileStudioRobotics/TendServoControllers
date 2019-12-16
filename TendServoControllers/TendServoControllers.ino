@@ -1,199 +1,135 @@
-/*
-   Dynamixel : AX-series with Protocol 1.0
-   Controller : OpenCM9.04C + OpenCM 485 EXP
-   Power Source : SMPS 12V 5A
-
-   AX-Series are connected to Dynamixel BUS on OpenCM 485 EXP board or DXL TTL connectors on OpenCM9.04
-   http://emanual.robotis.com/docs/en/parts/controller/opencm485exp/#layout
-
-   This example will test only one Dynamixel at a time.
-*/
-
 #include <DynamixelSDK.h>
-#include "Arduino.h"
 
-// AX-series Control table address
-#define ADDR_AX_TORQUE_ENABLE           24                 // Control table address is different in Dynamixel model
-#define ADDR_AX_GOAL_POSITION           30
-#define ADDR_AX_PRESENT_POSITION        36
-#define ADDR_AX_NEW_ID                  3
+#define ADDR_TORQUE_ENABLE           24           // Control table address is different in Dynamixel model
+#define ADDR_GOAL_POSITION           30
+#define ADDR_PRESENT_POSITION        36
+#define ADDR_MOVING                  46
+#define ADDR_SPEED					 32
+#define ADDR_CW_LIMIT			      6
+#define ADDR_CCW_LIMIT				  8
 
 // Protocol version
-#define PROTOCOL_VERSION                1.0                 // See which protocol version is used in the Dynamixel
+#define PROTOCOL_VERSION              1.0         // See which protocol version is used in the Dynamixel
 
 // Default setting
-#define DXL_ID                          1                   // Dynamixel ID: 1
-#define BAUDRATE                        1000000
-#define DEVICENAME                      "3"                 //DEVICENAME "1" -> Serial1(OpenCM9.04 DXL TTL Ports)
-#define NEW_DXL_ID                      2
-															// DEVICENAME "2" -> Serial2
-															// DEVICENAME "3" -> Serial3(OpenCM 485 EXP)
-#define TORQUE_ENABLE                   1                   // Value for enabling the torque
-#define TORQUE_DISABLE                  0                   // Value for disabling the torque
-#define DXL_MINIMUM_POSITION_VALUE      100                 // Dynamixel will rotate between this value
-#define DXL_MAXIMUM_POSITION_VALUE      1000                // and this value (note that the Dynamixel would not move when the position value is out of movable range. Check e-manual about the range of the Dynamixel you use.)
-#define DXL_MOVING_STATUS_THRESHOLD     20                  // Dynamixel moving status threshold
+#define Baudrate                1000000
+#define DeviceNAme             "3"				  // DEVICENAME "3" -> Serial3(OpenCM 485 EXP)
+#define Servo1					1                 // Dynamixel ID: 1
+#define Servo2					2				  // Dynamixel ID: 2
 
-#define ESC_ASCII_VALUE                 0x1b
+#define TorqueEnable            1                 // Value for enabling the torque
+#define TorqueDisable			0                 // Value for disabling the torque
+#define CWLimit					min_position      // CW angle limit is the minimum value of goal position
+#define CCWLimit				max_position	  // CCW angle limit is the maximum value of goal position
+#define Speed					20				  // Speed value [0 ~ 1024]
 
+// Create PortHandler instance
+dynamixel::PortHandler* portHandler;
+
+// Create PacketHandler instance
+dynamixel::PacketHandler* packetHandler;
+
+//***********Global Variables***********
+int comm_result = COMM_TX_FAIL;             // Communication result
+uint8_t error = 0;							// Dynamixel error
+int16_t present_position = 0;				// Present position
+
+
+float initial_position = 819.2;
+float max_position = initial_position + 51.2;
+float min_position = initial_position - 51.2;
+
+int goalPosition1 = 0;
+int isMoving1 = 0;
 
 
 void setup() {
-	// put your setup code here, to run once:
 	Serial.begin(115200);
-	while (!Serial);
 
+	// Initialize portHandler. Set the port path
+	portHandler = dynamixel::PortHandler::getPortHandler(DeviceNAme);
 
-	Serial.println("Start..");
-
-
-	// Initialize PortHandler instance
-	// Set the port path
-	// Get methods and members of PortHandlerLinux or PortHandlerWindows
-	dynamixel::PortHandler* portHandler = dynamixel::PortHandler::getPortHandler(DEVICENAME);
-
-	// Initialize PacketHandler instance
-	// Set the protocol version
-	// Get methods and members of Protocol1PacketHandler or Protocol2PacketHandler
-	dynamixel::PacketHandler* packetHandler = dynamixel::PacketHandler::getPacketHandler(PROTOCOL_VERSION);
-
-	int index = 0;
-	int dxl_comm_result = COMM_TX_FAIL;             // Communication result
-	int dxl_goal_position[2] = { DXL_MINIMUM_POSITION_VALUE, DXL_MAXIMUM_POSITION_VALUE };         // Goal position
-
-	uint8_t dxl_error = 0;                          // Dynamixel error
-	int16_t dxl_present_position = 0;               // Present position
+	// Initialize packetHandler. Set the protocol version
+	packetHandler = dynamixel::PacketHandler::getPacketHandler(PROTOCOL_VERSION);
 
 	// Open port
-	if (portHandler->openPort())
-	{
+	if (portHandler->openPort()) {
 		Serial.print("Succeeded to open the port!\n");
-	}
-	else
-	{
-		Serial.print("Failed to open the port!\n");
-		Serial.print("Press any key to terminate...\n");
-		return;
 	}
 
 	// Set port baudrate
-	if (portHandler->setBaudRate(BAUDRATE))
-	{
+	if (portHandler->setBaudRate(Baudrate)) {
 		Serial.print("Succeeded to change the baudrate!\n");
 	}
-	else
-	{
-		Serial.print("Failed to change the baudrate!\n");
-		Serial.print("Press any key to terminate...\n");
-		return;
-	}
-	// Change the ID
-  //
-  //  dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, DXL_ID, ADDR_AX_NEW_ID, NEW_DXL_ID, &dxl_error);
-  //  if (dxl_comm_result != COMM_SUCCESS)
-  //  {
-  //    packetHandler->getTxRxResult(dxl_comm_result);
-  //  }
-  //  else if (dxl_error != 0)
-  //  {
-  //    packetHandler->getRxPacketError(dxl_error);
-  //  }
-  //  else
-  //  {
-  //    Serial.print("Dynamixel has been successfully changed\n");
-  //  }
-
 
 	// Enable Dynamixel Torque
-	dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, DXL_ID, ADDR_AX_TORQUE_ENABLE, TORQUE_ENABLE, &dxl_error);
-	if (dxl_comm_result != COMM_SUCCESS)
-	{
-		packetHandler->getTxRxResult(dxl_comm_result);
+	comm_result = packetHandler->write1ByteTxRx(portHandler, Servo1, ADDR_TORQUE_ENABLE, TorqueEnable, &error);
+	comm_result = packetHandler->write1ByteTxRx(portHandler, Servo2, ADDR_TORQUE_ENABLE, TorqueEnable, &error);
+	if (comm_result != COMM_SUCCESS) {
+		packetHandler->getTxRxResult(comm_result);
 	}
-	else if (dxl_error != 0)
-	{
-		packetHandler->getRxPacketError(dxl_error);
-	}
-	else
-	{
+	else {
 		Serial.print("Dynamixel has been successfully connected \n");
 	}
+	// Set Control Mode
+	// "Wheel Mode" -> both limits are 0.
+	// "Joint Mode" -> neither limit is 0.
+	comm_result = packetHandler->write2ByteTxRx(portHandler, Servo1, ADDR_CW_LIMIT, CWLimit, &error);
+	comm_result = packetHandler->write2ByteTxRx(portHandler, Servo1, ADDR_CCW_LIMIT, CCWLimit, &error);
+	comm_result = packetHandler->write2ByteTxRx(portHandler, Servo2, ADDR_CW_LIMIT, CWLimit, &error);
+	comm_result = packetHandler->write2ByteTxRx(portHandler, Servo2, ADDR_CCW_LIMIT, CCWLimit, &error);
 
+	// Set speed
+	comm_result = packetHandler->write2ByteTxRx(portHandler, Servo1, ADDR_SPEED, Speed, &error);
+	comm_result = packetHandler->write2ByteTxRx(portHandler, Servo2, ADDR_SPEED, Speed, &error);
 
-	while (1)
-	{
-		Serial.print("Press any key to continue! (or press q to quit!)\n");
-
-
-		while (Serial.available() == 0);
-
-		int ch;
-
-		ch = Serial.read();
-		if (ch == 'q')
-			break;
-
-		// Write goal position
-		dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, DXL_ID, ADDR_AX_GOAL_POSITION, dxl_goal_position[index], &dxl_error);
-		if (dxl_comm_result != COMM_SUCCESS)
-		{
-			packetHandler->getTxRxResult(dxl_comm_result);
-		}
-		else if (dxl_error != 0)
-		{
-			packetHandler->getRxPacketError(dxl_error);
-		}
-
-		do
-		{
-			// Read present position
-			dxl_comm_result = packetHandler->read2ByteTxRx(portHandler, DXL_ID, ADDR_AX_PRESENT_POSITION, (uint16_t*)&dxl_present_position, &dxl_error);
-			if (dxl_comm_result != COMM_SUCCESS)
-			{
-				packetHandler->getTxRxResult(dxl_comm_result);
-			}
-			else if (dxl_error != 0)
-			{
-				packetHandler->getRxPacketError(dxl_error);
-			}
-
-			Serial.print("[ID:");      Serial.print(DXL_ID);
-			Serial.print(" GoalPos:"); Serial.print(dxl_goal_position[index]);
-			Serial.print(" PresPos:");  Serial.print(dxl_present_position);
-			Serial.println(" ");
-
-
-		} while ((abs(dxl_goal_position[index] - dxl_present_position) > DXL_MOVING_STATUS_THRESHOLD));
-
-		// Change goal position
-		if (index == 0)
-		{
-			index = 1;
-		}
-		else
-		{
-			index = 0;
-		}
-	}
-
-	// Disable Dynamixel Torque
-	dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, DXL_ID, ADDR_AX_TORQUE_ENABLE, TORQUE_DISABLE, &dxl_error);
-	if (dxl_comm_result != COMM_SUCCESS)
-	{
-		packetHandler->getTxRxResult(dxl_comm_result);
-	}
-	else if (dxl_error != 0)
-	{
-		packetHandler->getRxPacketError(dxl_error);
-	}
-
-	// Close port
-	portHandler->closePort();
-
+	// Initial Homing position. Value is 819.2 
+	comm_result = packetHandler->write2ByteTxRx(portHandler, Servo1, ADDR_GOAL_POSITION, 819.2, &error);
 }
-
 
 void loop() {
-	// put your main code here, to run repeatedly:
+	packetHandler->read1ByteTxRx(portHandler, Servo1, ADDR_MOVING, (uint8_t*)&isMoving1, &error);
+	//packetHandler->read1ByteTxRx(portHandler, Servo2, ADDR_MOVING, (uint8_t*)&isMoving2, &error);
+	if (isMoving1 == 0) {
+		//Send instruction packet to move for goalPosition
+		comm_result = packetHandler->write2ByteTxRx(portHandler, Servo1, ADDR_GOAL_POSITION, goalPosition1, &error);
+		//toggle the position if goalPosition is 1000, set to 0, if 0, set to 1000
+		if (goalPosition1 == 1000) {
+			goalPosition1 = 0;
+		}
+		else {
+			goalPosition1 = 1000;
+		}
+	}
+	//if (isMoving2 == 0) {
+	//	comm_result = packetHandler->write2ByteTxRx(portHandler, Servo2, ADDR_GOAL_POSITION, goalPosition2, &error);
+	//	if (goalPosition2 == max_position) {
+	//		goalPosition2 = min_position;
+	//	}
+	//	else {
+	//		goalPosition2 = max_position;
+	//	}
+	//}
+	packetHandler->read2ByteTxRx(portHandler, Servo1, ADDR_PRESENT_POSITION, (uint16_t*)&present_position, &error);
+	packetHandler->read2ByteTxRx(portHandler, Servo2, ADDR_PRESENT_POSITION, (uint16_t*)&present_position, &error);
 
+	Serial.print(present_position);
+	Serial.print("\t");
+	Serial.println(goalPosition1);
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
+
+*/
