@@ -33,7 +33,7 @@ dynamixel::PacketHandler* packetHandler;
 int comm_result = COMM_TX_FAIL;             // Communication result
 uint8_t error = 0;							// Dynamixel error
 int16_t present_position = 0;				// Present position
-
+int hello = 12;
 
 float initial_position = 819.2;
 float max_position = initial_position + 51.2;
