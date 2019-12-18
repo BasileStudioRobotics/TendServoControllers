@@ -21,7 +21,7 @@
 #define TorqueDisable			0                 // Value for disabling the torque
 #define CWLimit					min_position      // CW angle limit is the minimum value of goal position
 #define CCWLimit				max_position	  // CCW angle limit is the maximum value of goal position
-#define Speed					20				  // Speed value [0 ~ 1024]
+#define Speed					10				  // Speed value [0 ~ 1024]...20... 5 seems working fine
 
 // Create PortHandler instance
 dynamixel::PortHandler* portHandler;
@@ -33,14 +33,15 @@ dynamixel::PacketHandler* packetHandler;
 int comm_result = COMM_TX_FAIL;             // Communication result
 uint8_t error = 0;							// Dynamixel error
 int16_t present_position = 0;				// Present position
-int hello = 12;
 
 float initial_position = 819.2;
-float max_position = initial_position + 51.2;
-float min_position = initial_position - 51.2;
+float max_position = initial_position + 34.13;  //initial was 51.2 (15 degrees), changed to 10 degrees = 34.13
+float min_position = initial_position - 34.13;
 
 int goalPosition1 = 0;
+int goalPosition2 = 0;
 int isMoving1 = 0;
+int isMoving2 = 0;
 
 
 void setup() {
@@ -85,14 +86,16 @@ void setup() {
 
 	// Initial Homing position. Value is 819.2 
 	comm_result = packetHandler->write2ByteTxRx(portHandler, Servo1, ADDR_GOAL_POSITION, 819.2, &error);
+	comm_result = packetHandler->write2ByteTxRx(portHandler, Servo2, ADDR_GOAL_POSITION, 819.2, &error);
 }
 
 void loop() {
 	packetHandler->read1ByteTxRx(portHandler, Servo1, ADDR_MOVING, (uint8_t*)&isMoving1, &error);
-	//packetHandler->read1ByteTxRx(portHandler, Servo2, ADDR_MOVING, (uint8_t*)&isMoving2, &error);
+	packetHandler->read1ByteTxRx(portHandler, Servo2, ADDR_MOVING, (uint8_t*)&isMoving2, &error);
 	if (isMoving1 == 0) {
 		//Send instruction packet to move for goalPosition
 		comm_result = packetHandler->write2ByteTxRx(portHandler, Servo1, ADDR_GOAL_POSITION, goalPosition1, &error);
+		comm_result = packetHandler->write2ByteTxRx(portHandler, Servo2, ADDR_GOAL_POSITION, goalPosition1, &error);
 		//toggle the position if goalPosition is 1000, set to 0, if 0, set to 1000
 		if (goalPosition1 == 1000) {
 			goalPosition1 = 0;
@@ -101,35 +104,19 @@ void loop() {
 			goalPosition1 = 1000;
 		}
 	}
-	//if (isMoving2 == 0) {
-	//	comm_result = packetHandler->write2ByteTxRx(portHandler, Servo2, ADDR_GOAL_POSITION, goalPosition2, &error);
-	//	if (goalPosition2 == max_position) {
-	//		goalPosition2 = min_position;
-	//	}
-	//	else {
-	//		goalPosition2 = max_position;
-	//	}
-	//}
+	/*if (isMoving2 == 0) {
+		comm_result = packetHandler->write2ByteTxRx(portHandler, Servo2, ADDR_GOAL_POSITION, goalPosition2, &error);
+		if (goalPosition2 == 1000) {
+			goalPosition2 = 0;
+		}
+		else {
+			goalPosition2 = 1000;
+		}
+	}*/
 	packetHandler->read2ByteTxRx(portHandler, Servo1, ADDR_PRESENT_POSITION, (uint16_t*)&present_position, &error);
 	packetHandler->read2ByteTxRx(portHandler, Servo2, ADDR_PRESENT_POSITION, (uint16_t*)&present_position, &error);
 
-	Serial.print(present_position);
-	Serial.print("\t");
-	Serial.println(goalPosition1);
+	//Serial.print(present_position);
+	//Serial.print("\t");
+	//Serial.println(goalPosition1);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-/*
-
-*/
